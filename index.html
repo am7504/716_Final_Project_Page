@@ -1,0 +1,154 @@
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=yes'>
+  <title>CSCI 716 –– Final Project</title>
+  <style>
+    html {
+      background: black;
+      color: white;
+    }
+    canvas {
+      border: 1px solid #555;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id='canvas' width='512' height='512'></canvas>
+  <script type='module'>
+
+    import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/three.module.min.js';
+
+    let canvas;
+    let bounds;
+    let camera;
+    let scene;
+    let renderer;
+    let cube;
+    let picker;
+    let picked = null;
+    let color = 0xffffff;
+
+    const start = new Date();
+    const raycaster = new THREE.Raycaster();
+
+    const radians = degrees =>
+      (degrees * (Math.PI / 180));
+
+    const frame = () => {
+      // get `t`, in seconds
+      const t = ((Date.now() - start) / 1000);
+      // if 20 seconds has passed, stop the animation
+      if (t >= 20) return;
+      // update position (x, y, z)
+      cube.position.set((t * 5), (t * 5), 0);
+      // update rotation (x, y, z)
+      cube.rotation.set(0, radians(t * 18), 0);
+      // render one frame
+      renderer.render(scene, camera);
+      // continue animation
+      requestAnimationFrame(frame);
+    };
+
+    const getRenderer = canvas => {
+      // create a renderer
+      const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      // --
+      return renderer;
+    };
+
+    const getCamera = (scene, canvas) => {
+      // create a camera
+      const fov = 30;
+      const aspect = 2;
+      const near = 0.1;
+      const far = 1000;
+      const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+      // set its position and direction
+      camera.position.set(0, 45, 270);
+      camera.lookAt(new THREE.Vector3(50, 50, 0));
+      // set its aspect/size
+      camera.aspect = (canvas.clientWidth / canvas.clientHeight);
+      camera.updateProjectionMatrix();
+      // add lights
+      const color = 0xFFFFFF;
+      const intensity = 1;
+      const light1 = new THREE.AmbientLight(color, intensity);
+      const light2 = new THREE.DirectionalLight(color, intensity);
+      light2.position.set(5, 10, 0);
+      camera.add(light1);
+      camera.add(light2);
+      // add it to the scene
+      scene.add(camera);
+      // --
+      return camera;
+    };
+
+    const getCube = scene => {
+      // create a cube
+      const geometry = new THREE.BoxGeometry(16, 16, 16);
+      const material = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+      cube = new THREE.Mesh(geometry, material);
+      // add it to the scene
+      scene.add(cube);
+      // -- 
+      return cube;
+    };
+
+    const getPosition = (event, bounds) => ({
+      x: ((((event.x - bounds.left) / bounds.width) * 2) - 1),
+      y: ((((event.y - bounds.top) / bounds.height) * -2) + 1)
+    });
+
+    const handleHover = event => {
+      // if there is already a picked object...
+      if (picked) {
+        // restore its color
+        picked.material.color.setHex(color);
+        // unset the picked object
+        picked = undefined;
+      };
+      // get mouse position
+      const position = getPosition(event, bounds);
+      // cast a ray
+      raycaster.setFromCamera(position, camera);
+      // get the list of objects that the ray intersected
+      const intersected = raycaster.intersectObjects(scene.children);
+      // if there was at least one intersected object...
+      if (intersected.length) {
+        // change cursor style
+        document.body.style.cursor = 'pointer';
+        // pick the first one
+        picked = intersected[0].object;
+        // save its color
+        color = picked.material.color.getHex();
+        // set its color
+        picked.material.color.setHex(0x00aaff);
+      }
+      // otherwise, reset cursor style
+      else document.body.style.cursor = 'auto';
+    };
+
+    const main = () => {
+      // set up a scene
+      canvas = document.querySelector('#canvas');
+      bounds = canvas.getBoundingClientRect();
+      renderer = getRenderer(canvas);
+      scene = new THREE.Scene();
+      camera = getCamera(scene, canvas);
+      cube = getCube(scene);
+      // add a mouse event handler
+      canvas.addEventListener('mousemove', handleHover, { passive: true });
+      // start an animation
+      requestAnimationFrame(frame);
+    };
+
+    main();
+
+  </script>
+</body>
+</html>
+
