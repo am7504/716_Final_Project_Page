@@ -110,7 +110,7 @@ function setupSimulation() {
     }
 
     // Initialize Delaunay
-    delaunay = new Delaunay3D(BOX_SIZE * 2);
+    delaunay = new Delaunay3D(BOX_SIZE * 10);
     drawDelaunay();
 
     // Update UI
@@ -313,13 +313,14 @@ class Tetrahedron {
         M.set(a_.x, a_.y, a_.z, b_.x, b_.y, b_.z, c_.x, c_.y, c_.z);
         
         const det = M.determinant();
-        if (Math.abs(det) < 1e-12) { // Degenerate tetrahedron
+        if (Math.abs(det) < 1e-8) { // Degenerate tetrahedron
             this.circumcenter = null;
             this.radiusSq = Infinity;
             return;
         }
         
         const invDet = 0.5 / det;
+        //const invDet = 0.5 / Math.abs(det);
         
         const x = (A * (b_.y * c_.z - c_.y * b_.z) - B * (a_.y * c_.z - c_.y * a_.z) + C * (a_.y * b_.z - b_.y * a_.z)) * invDet;
         const y = (A * (b_.z * c_.x - c_.z * b_.x) - B * (a_.z * c_.x - c_.z * a_.x) + C * (a_.z * b_.x - b_.z * a_.x)) * invDet;
@@ -346,11 +347,21 @@ class Tetrahedron {
         ];
     }
     
+    //isAdjacent(other) {
+    //    let common = 0;
+    //    for(const p1 of this.points) {
+    //        for (const p2 of other.points) {
+    //            if (p1.equals(p2)) common++;
+    //        }
+    //    }
+    //    return common === 3;
+    //}
+
     isAdjacent(other) {
         let common = 0;
         for(const p1 of this.points) {
             for (const p2 of other.points) {
-                if (p1.equals(p2)) common++;
+                if (p1.distanceTo(p2) < 1e-8) common++;
             }
         }
         return common === 3;
@@ -362,10 +373,16 @@ class Delaunay3D {
         this.tetrahedra = [];
         // Create a large super-tetrahedron
         const s = size;
+        //const p1 = new THREE.Vector3(-s, -s, -s);
+        //const p2 = new THREE.Vector3(s, -s, 0);
+        //const p3 = new THREE.Vector3(0, s, -s);
+        //const p4 = new THREE.Vector3(0, -s, s);
+
         const p1 = new THREE.Vector3(-s, -s, -s);
         const p2 = new THREE.Vector3(s, -s, 0);
         const p3 = new THREE.Vector3(0, s, -s);
-        const p4 = new THREE.Vector3(0, -s, s);
+        const p4 = new THREE.Vector3(0, 0, s);
+
         this.superPoints = [p1, p2, p3, p4];
         this.tetrahedra.push(new Tetrahedron(p1, p2, p3, p4));
     }
