@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { ConvexHull } from 'three/addons/math/ConvexHull.js';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 
 // --- Global Variables ---
 let scene, camera, renderer, controls;
@@ -20,7 +20,8 @@ const JITTER_AMOUNT = 1e-6;
 const sceneObjects = {
     points: new THREE.Group(),
     delaunayEdges: new THREE.Group(),
-    voronoiEdges: new THREE.Group()
+    voronoiEdges: new THREE.Group(),
+    voronoiRegions: new THREE.Group(),
 };
 
 
@@ -34,7 +35,7 @@ const stepInfo = document.getElementById('step-info');
 function init() {
     // Scene
     scene = new THREE.Scene();
-    scene.add(sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges);
+    scene.add(sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges, sceneObjects.voronoiRegions);
 
     // Camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -118,6 +119,7 @@ function setupSimulation() {
     startBtn.textContent = 'Restart';
     nextBtn.disabled = false;
     runAllBtn.disabled = false;
+    sceneObjects.delaunayEdges.visible = true;
 
     animate();
 }
@@ -129,6 +131,7 @@ function doNextStep() {
         runAllBtn.disabled = true;
         sceneObjects.delaunayEdges.visible = false;
         drawVoronoi();
+        pointIndex++;
         return;
     }
 
@@ -145,29 +148,25 @@ function doNextStep() {
         Created ${newTetras.length} new tetrahedra (green).`;
 }
 
+function next() {
+    // run the next step
+    doNextStep();
+    // if it was the last step, stop the animation loop
+    if (pointIndex > points.length) return;
+    // otherwise, after a delay, run the next step
+    setTimeout(next, 200);
+};
+
 function runAllSteps() {
     nextBtn.disabled = true;
     runAllBtn.disabled = true;
-
-    function next() {
-        doNextStep();
-        setTimeout(next, 200); // Delay between steps
-        // if (pointIndex < points.length) {
-            
-        // } else {
-        //     stepInfo.textContent = 'All points added. Triangulation complete!';
-        //     drawDelaunay(); // Final clean draw
-        //     // sceneObjects.delaunayEdges.visible = false;
-        //     drawVoronoi();
-        // }
-    }
     next();
-}
+};
 
 
 // --- Visualization ---
 function clearScene() {
-    [sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges].forEach(group => {
+    [sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges, sceneObjects.voronoiRegions].forEach(group => {
         while (group.children.length) group.remove(group.children[0]);
     });
 }
@@ -206,61 +205,102 @@ function visualizeStep(point, badTetras, cavityFaces, newTetras) {
     sceneObjects.delaunayEdges.add(new THREE.LineSegments(getTetraEdges(newTetras), materials.newTetra));
 }
 
+const drawVoronoiRegions = tetrahedrons => {
+    const points = new Set();
+    const pointToCircumcenters = new Map();
+    // for each tetrahedron...
+    for (const tetra of tetrahedrons) {
+        // get its circumcenter
+        const cc = tetra.circumcenter;
+        // for each point...
+        for (const point of tetra.points) {
+            // add to set
+            points.add(point);
+            // if the point doesn't exist yet...
+            if (!pointToCircumcenters.has(point))
+                // add it to the map, as an empty array
+                pointToCircumcenters.set(point, []);
+            // add the circumcenter to the point's array
+            pointToCircumcenters.get(point).push(cc.clone());
+        };
+    };
+    // for each point...
+    for (const point of points) {
+        // get its circumcenters
+        const circumcenters = (pointToCircumcenters.get(point) || []);
+        // if there are enough circumcenters to define a voronoi region...
+        if (circumcenters.length >= 4) {
+            // create and add the voronoi region
+            const geometry = new ConvexGeometry(circumcenters);
+            const material = new THREE.MeshBasicMaterial({
+                color: (Math.random() * 0xffffff),
+                transparent: true,
+                opacity: 0.033,
+                depthWrite: false,
+            });
+            const voronoiMesh = new THREE.Mesh(geometry, material);
+            voronoiMesh.userData.point = point;
+            sceneObjects.voronoiRegions.add(voronoiMesh);
+        };
+    };
+};
+
 function drawVoronoi() {
-    // Clear any previous visualizations
+    // clear previous visualizations
     while (sceneObjects.voronoiEdges.children.length) {
         sceneObjects.voronoiEdges.remove(sceneObjects.voronoiEdges.children[0]);
-    }
-
-    const finalTetras = delaunay.getTriangulation();
+        sceneObjects.voronoiRegions.remove(sceneObjects.voronoiRegions.children[0]);
+    };
+    // --
     const positions = [];
+    const finalTetras = delaunay.getTriangulation();
     const bounds = new THREE.Box3(
         new THREE.Vector3(-BOX_SIZE / 2, -BOX_SIZE / 2, -BOX_SIZE / 2),
         new THREE.Vector3(BOX_SIZE / 2, BOX_SIZE / 2, BOX_SIZE / 2)
     );
-
-    // Reusable objects for calculation to improve performance
+    // --
+    drawVoronoiRegions(finalTetras);
+    // --
     const ray = new THREE.Ray();
     const intersectionPoint = new THREE.Vector3();
-
-    // Iterate through all pairs of adjacent tetrahedra
+    // for each tetrahedra...
     for (let i = 0; i < finalTetras.length; i++) {
-        for (let j = i + 1; j < finalTetras.length; j++) {
+        // for each next tetrahedra...
+        for (let j = (i + 1); j < finalTetras.length; j++) {
+            // if the two tetrahedra are NOT adjacent, skip
             if (!finalTetras[i].isAdjacent(finalTetras[j])) continue;
-
+            // get their circumcenters
             const c1 = finalTetras[i].circumcenter;
             const c2 = finalTetras[j].circumcenter;
+            // if a circumcenter is missing, skip
             if (!c1 || !c2) continue;
-
+            // check if circumcenters are within bounds
             const isC1Inside = bounds.containsPoint(c1);
             const isC2Inside = bounds.containsPoint(c2);
-
+            // CASE 1: Both points are inside the box. Draw the full edge.
             if (isC1Inside && isC2Inside) {
-                // CASE 1: Both points are inside the box. Draw the full edge.
                 positions.push(c1.x, c1.y, c1.z, c2.x, c2.y, c2.z);
-
-            } else if (isC1Inside && !isC2Inside) {
-                // CASE 2: One point is inside, one is outside. Find the intersection.
-                ray.set(c1, c2.clone().sub(c1).normalize());
-                if (ray.intersectBox(bounds, intersectionPoint)) {
-                    positions.push(c1.x, c1.y, c1.z, intersectionPoint.x, intersectionPoint.y, intersectionPoint.z);
-                }
-
-            } else if (!isC1Inside && isC2Inside) {
-                // CASE 2 (Reversed): The other point is inside. Find the intersection.
-                ray.set(c2, c1.clone().sub(c2).normalize());
-                if (ray.intersectBox(bounds, intersectionPoint)) {
-                    positions.push(c2.x, c2.y, c2.z, intersectionPoint.x, intersectionPoint.y, intersectionPoint.z);
-                }
             }
+            // CASE 2: One point is inside, one is outside. Find the intersection.
+            else if (isC1Inside && !isC2Inside) {
+                ray.set(c1, c2.clone().sub(c1).normalize());
+                if (ray.intersectBox(bounds, intersectionPoint))
+                    positions.push(c1.x, c1.y, c1.z, intersectionPoint.x, intersectionPoint.y, intersectionPoint.z);
+            } 
+            // CASE 2 (Reversed): The other point is inside. Find the intersection.
+            else if (!isC1Inside && isC2Inside) {
+                ray.set(c2, c1.clone().sub(c2).normalize());
+                if (ray.intersectBox(bounds, intersectionPoint))
+                    positions.push(c2.x, c2.y, c2.z, intersectionPoint.x, intersectionPoint.y, intersectionPoint.z);
+            };
             // CASE 3: Both points are outside. We ignore this edge.
-        }
-    }
-
+        };
+    };
+    // add voronoi edges to scene
     const voronoiGeom = new THREE.BufferGeometry();
     voronoiGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     sceneObjects.voronoiEdges.add(new THREE.LineSegments(voronoiGeom, materials.voronoi));
-}
+};
 
 function getTetraEdges(tetras) {
     const positions = [];
