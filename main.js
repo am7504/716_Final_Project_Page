@@ -243,6 +243,7 @@ const doNextStep = () => {
     else if (voronoiRegionIndex === voronoiRegionLength) {
         // hide the tetrahedralization edges
         sceneObjects.delaunayEdges.visible = false;
+        sceneObjects.circumcenters.visible = false;
         // update the UI
         info.textContent = 'Voronoi Construction complete.';
         nextBtn.disabled = true;
