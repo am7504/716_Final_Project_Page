@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
-import { clipMesh } from './clip.js';
 import { Delaunay3D } from './classes.js';
+import { Brush, Evaluator, INTERSECTION } from 'three-bvh-csg';
 
 // --- Global Variables ---
 let scene, camera, renderer, controls;
@@ -73,10 +73,17 @@ function init() {
     nextBtn.addEventListener('click', doNextStep);
     runAllBtn.addEventListener('click', runAllSteps);
     pointsSlider.addEventListener('input', (e) => pointsCountSpan.textContent = e.target.value);
-    sceneObjects.voronoiEdges.visible = true;
 
     animate();
 }
+
+const dot = () => {
+    const radius = 0.1;
+    const geometry = new THREE.SphereGeometry(radius, 16, 12);
+    const material = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    const mesh = new THREE.Mesh(geometry, material);
+    return mesh;
+};
 
 // Logic for simulation
 function setupSimulation() {
@@ -89,7 +96,6 @@ function setupSimulation() {
 
     // Generate random points
     const numPoints = parseInt(pointsSlider.value);
-    let radius = 0.1
     for (let i = 0; i < numPoints; i++) {
         const pos = new THREE.Vector3(
             (Math.random() - 0.5) * BOX_SIZE,
@@ -102,9 +108,7 @@ function setupSimulation() {
         pos.z += (Math.random() - 0.5) * JITTER_AMOUNT;
 
         // each starting point is just a small sphere
-        const sphereGeom = new THREE.SphereGeometry(radius, 16, 12);
-        const sphereMat = new THREE.MeshStandardMaterial({ color: 0x808080 });
-        const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+        const sphere = dot();
         sphere.position.copy(pos);
 
         // add to the points array used by Delauney
@@ -185,9 +189,13 @@ function drawDelaunay() {
 function visualizeStep(point, badTetras, cavityFaces, newTetras) {
     clearScene();
 
-    // Draw existing points
-    const pointsGeom = new THREE.BufferGeometry().setFromPoints(points.slice(0, pointIndex));
-    sceneObjects.points.add(new THREE.Points(pointsGeom, materials.point));
+    // for each point...
+    for (let i = 0; i < pointIndex; i++) {
+        // add point
+        const sphere = dot();
+        sphere.position.copy(points[i]);
+        sceneObjects.points.add(sphere);
+    };
 
     // Draw current "good" tetras
     const goodTetras = delaunay.tetrahedra.filter(t => !badTetras.includes(t) && !newTetras.includes(t));
@@ -214,7 +222,7 @@ const getPoints = tetrahedrons => {
     for (const tetra of tetrahedrons) {
         // get its circumcenter
         const cc = tetra.circumcenter;
-        // if a circumcenter is missing, skip
+        // if the circumcenter is missing, skip
         if (!cc) continue;
         // for each point...
         for (const point of tetra.points) {
@@ -250,89 +258,47 @@ const drawVoronoiRegions = (tetrahedrons, bounds) => {
             const material = new THREE.MeshBasicMaterial({
                 color: (Math.random() * 0xffffff),
                 transparent: true,
-                opacity: 0.125,
+                opacity: 0.25,
                 depthWrite: false,
                 polygonOffset: true,
-                // clippingPlanes: clipPlanes(bounds),
                 side: THREE.DoubleSide
             });
             // create a mesh
             const mesh = new THREE.Mesh(geometry, material);
-            /*
+            // if the mesh doesn't have uv's...
+            if (!mesh.geometry.attributes.uv) {
+                // add uv's, and update normals
+                const uvArray = new Float32Array(mesh.geometry.attributes.position.count * 2);
+                mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+                mesh.geometry.computeVertexNormals();
+            };
+            // intersect mesh & bounds (clip to bounding box)
+            const brushA = new Brush(mesh.geometry.clone());
+            const brushB = new Brush(bounds.geometry.clone());
+            const evaluator = new Evaluator();
+            const clippedBrush = evaluator.evaluate(brushA, brushB, INTERSECTION);
+            const clippedMesh = new THREE.Mesh(clippedBrush.geometry, mesh.material);
             // add metadata
-            mesh.userData.point = point;
+            clippedMesh.userData.point = point;
             // add it to the scene
-            sceneObjects.voronoiRegions.add(mesh);
-            */
-            // clip the mesh
-            const clippedRegion = clipMesh(mesh, bounds);
-            // if the clipped region is valid...
-            if (clippedRegion) {
-                // add metadata
-                clippedRegion.userData.point = point;
-                // add it to the scene
-                sceneObjects.voronoiRegions.add(clippedRegion);
-            };
+            sceneObjects.voronoiRegions.add(clippedMesh);
         };
     };
 };
 
-const drawVoronoiEdges = (tetrahedrons, bounds) => {
-    const positions = [];
-    const ray = new THREE.Ray();
-    const intersectionPoint = new THREE.Vector3();
-    // for each tetrahedra...
-    for (let i = 0; i < tetrahedrons.length; i++) {
-        // for each next tetrahedra...
-        for (let j = (i + 1); j < tetrahedrons.length; j++) {
-            // if the two tetrahedra are NOT adjacent, skip
-            if (!tetrahedrons[i].isAdjacent(tetrahedrons[j])) continue;
-            // get their circumcenters
-            const c1 = tetrahedrons[i].circumcenter;
-            const c2 = tetrahedrons[j].circumcenter;
-            // if a circumcenter is missing, skip
-            if (!c1 || !c2) continue;
-            // check if circumcenters are within bounds
-            const isC1Inside = bounds.containsPoint(c1);
-            const isC2Inside = bounds.containsPoint(c2);
-            // CASE 1: Both points are inside the box. Draw the full edge.
-            if (isC1Inside && isC2Inside) {
-                positions.push(c1.x, c1.y, c1.z, c2.x, c2.y, c2.z);
-            }
-            // CASE 2: One point is inside, one is outside. Find the intersection.
-            else if (isC1Inside && !isC2Inside) {
-                ray.set(c1, c2.clone().sub(c1).normalize());
-                if (ray.intersectBox(bounds, intersectionPoint))
-                    positions.push(c1.x, c1.y, c1.z, intersectionPoint.x, intersectionPoint.y, intersectionPoint.z);
-            } 
-            // CASE 2 (Reversed): The other point is inside. Find the intersection.
-            else if (!isC1Inside && isC2Inside) {
-                ray.set(c2, c1.clone().sub(c2).normalize());
-                if (ray.intersectBox(bounds, intersectionPoint))
-                    positions.push(c2.x, c2.y, c2.z, intersectionPoint.x, intersectionPoint.y, intersectionPoint.z);
-            };
-            // CASE 3: Both points are outside. We ignore this edge.
-        };
-    };
-    // add voronoi edges to scene
-    const voronoiGeom = new THREE.BufferGeometry();
-    voronoiGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    sceneObjects.voronoiEdges.add(new THREE.LineSegments(voronoiGeom, materials.voronoi));
-};
-
-function drawVoronoi() {
+const drawVoronoi = () => {
     // clear previous visualizations
-    while (sceneObjects.voronoiEdges.children.length) {
-        sceneObjects.voronoiEdges.remove(sceneObjects.voronoiEdges.children[0]);
+    while (sceneObjects.voronoiRegions.children.length)
         sceneObjects.voronoiRegions.remove(sceneObjects.voronoiRegions.children[0]);
-    };
     // get bounds
-    const bounds = new THREE.Box3(
-        new THREE.Vector3(-BOX_SIZE / 2, -BOX_SIZE / 2, -BOX_SIZE / 2),
-        new THREE.Vector3(BOX_SIZE / 2, BOX_SIZE / 2, BOX_SIZE / 2)
+    const bounds = new THREE.Mesh(
+        new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
     );
+    bounds.position.set(0, 0, 0);
+    bounds.updateMatrixWorld();
     // add corner points to delaunay
-    const half = ((BOX_SIZE / 2) * 1.1);
+    const half = ((BOX_SIZE / 2) * 1.5);
     for (let x = -1; x <= 1; x += 2) {
         for (let y = -1; y <= 1; y += 2) {
             for (let z = -1; z <= 1; z += 2) {
@@ -344,8 +310,6 @@ function drawVoronoi() {
     const tetrahedrons = delaunay.getTriangulation();
     // draw the voronoi regions
     drawVoronoiRegions(tetrahedrons, bounds);
-    // draw the voronoi edges
-    // drawVoronoiEdges(tetrahedrons, bounds);
 };
 
 function getTetraEdges(tetras) {
