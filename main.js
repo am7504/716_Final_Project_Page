@@ -6,8 +6,9 @@ import { Brush, Evaluator, INTERSECTION } from 'three-bvh-csg';
 
 // --- Global Variables ---
 let scene, camera, renderer, controls;
-let delaunay, points, pointIndex, animationFrameId
-let tetraPoints = new Set(), tetraPointIndex = 0, tetraPointsLength = 0, tetraPointMap = new Map();
+let delaunay, points, pointIndex, animationFrameId;
+let circumcenterPoints = [], circumcenterIndex = 0, circumcenterLength = 0;
+let voronoiRegions = new Set(), voronoiRegionIndex = 0, voronoiRegionLength = 0, voronoiRegionMap = new Map();
 
 const materials = {
     point: new THREE.PointsMaterial({ color: 0x00aaff, size: 0.1 }),
@@ -23,9 +24,14 @@ const JITTER_AMOUNT = 1e-6;
 const sceneObjects = {
     points: new THREE.Group(),
     delaunayEdges: new THREE.Group(),
+    circumcenters: new THREE.Group(),
     voronoiEdges: new THREE.Group(),
     voronoiRegions: new THREE.Group(),
 };
+const box = new THREE.Box3(
+    new THREE.Vector3((-BOX_SIZE / 2), (-BOX_SIZE / 2), (-BOX_SIZE / 2)),
+    new THREE.Vector3((BOX_SIZE / 2), (BOX_SIZE / 2), (BOX_SIZE / 2))
+);
 const bounds = new THREE.Mesh(
     new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
@@ -45,7 +51,7 @@ const info = document.getElementById('info');
 function init() {
     // Scene
     scene = new THREE.Scene();
-    scene.add(sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges, sceneObjects.voronoiRegions);
+    scene.add(sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges, sceneObjects.circumcenters, sceneObjects.voronoiRegions);
 
     // Camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -63,10 +69,10 @@ function init() {
     controls.enableDamping = true;
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 10, 7);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(10, 10, 10);
     scene.add(directionalLight);
     scene.background = new THREE.Color(0xFFFFFF);
 
@@ -86,10 +92,17 @@ function init() {
     animate();
 }
 
-const dot = () => {
+const cube = (color = 0x808080) => {
+    const geometry = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    const material = new THREE.MeshStandardMaterial({ color: color });
+    const mesh = new THREE.Mesh(geometry, material);
+    return mesh;
+};
+
+const dot = (color = 0x808080) => {
     const radius = 0.1;
     const geometry = new THREE.SphereGeometry(radius, 16, 12);
-    const material = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    const material = new THREE.MeshStandardMaterial({ color: color });
     const mesh = new THREE.Mesh(geometry, material);
     return mesh;
 };
@@ -99,9 +112,11 @@ function setupSimulation() {
     // Reset state
     cancelAnimationFrame(animationFrameId);
     pointIndex = 0;
-    tetraPointIndex = 0;
+    circumcenterIndex = 0;
+    voronoiRegionIndex = 0;
     points = [];
-    tetraPoints = new Set();
+    circumcenterPoints = [];
+    voronoiRegions = new Set();
     clearScene();
     scene.background = new THREE.Color(0xffffff);
 
@@ -144,7 +159,12 @@ function setupSimulation() {
 }
 
 const doNextStep = () => {
-    // if there are input points left to add...
+    // --
+    // 1) tetrahedrons
+    // 2) circumcenters
+    // 3) voronoi regions
+    // --
+    // if tetrahedralization is in-progress...
     if (pointIndex < points.length) {
         // update tetrahedralization
         tetrahedralization();
@@ -168,26 +188,59 @@ const doNextStep = () => {
         const tetrahedrons = delaunay.getTriangulation();
         // get points and map, from tetrahedron
         const { points, pointToCircumcenters } = getPoints(tetrahedrons);
-        // set tetra points 
-        tetraPoints = points;
-        tetraPointsLength = points.size;
-        tetraPointMap = pointToCircumcenters;
+        // get valid circumcenters
+        let circumcenters = [];
+        for (const tetrahedron of tetrahedrons) {
+            // if the circumcenter is missing, skip
+            if (!tetrahedron.circumcenter) continue;
+            // if the circumcenter is not within the box, skip
+            if (!box.containsPoint(tetrahedron.circumcenter)) continue;
+            // otherwise, add it to circumcenter set
+            circumcenters.push(tetrahedron.circumcenter);
+        };
+        // set circumcenter data
+        circumcenterPoints = circumcenters;
+        circumcenterLength = circumcenters.length;
+        // set voronoi region data
+        voronoiRegions = points;
+        voronoiRegionLength = points.size;
+        voronoiRegionMap = pointToCircumcenters;
     }
-    // if there are tetrahedron points left to add...
-    else if (tetraPointIndex < tetraPointsLength) {
-        // get the next point
-        const point = tetraPoints.values().next().value;
-        // remove the point
-        tetraPoints.delete(point);
+    // if there are circumcenters left to add...
+    else if (circumcenterIndex < circumcenterLength) {
+        // create and add marker, for the current circumcenter
+        const marker = cube(0xffaa00);
+        marker.position.copy(circumcenterPoints[circumcenterIndex]);
+        sceneObjects.circumcenters.add(marker);
+        // update the UI
+        stage.innerHTML = `Circumcenter Search`;
+        step.innerHTML = `${circumcenterIndex}/${(circumcenterLength - 1)}`;
+        info.innerHTML = `Found a circumcenter.`;
+        // increment index
+        circumcenterIndex++;
+    }
+    // if circumcenter search is done...
+    else if (circumcenterIndex === circumcenterLength) {
+        // update the UI
+        info.textContent = 'Circumcenter Search complete.';
+        // increment index
+        circumcenterIndex++;
+    }
+    // if there are voronoi regions left to add...
+    else if (voronoiRegionIndex < voronoiRegionLength) {
+        // get the next region
+        const region = voronoiRegions.values().next().value;
+        // remove the region
+        voronoiRegions.delete(region);
         // get its circumcenters
-        const circumcenters = (tetraPointMap.get(point) || []);
+        const circumcenters = (voronoiRegionMap.get(region) || []);
         // draw the voronoi region
         voronoi(circumcenters, bounds);
         // increment index
-        tetraPointIndex++;
+        voronoiRegionIndex++;
     }
     // if voronoi construction is done...
-    else if (tetraPointIndex === tetraPointsLength) {
+    else if (voronoiRegionIndex === voronoiRegionLength) {
         // hide the tetrahedralization edges
         sceneObjects.delaunayEdges.visible = false;
         // update the UI
@@ -195,7 +248,7 @@ const doNextStep = () => {
         nextBtn.disabled = true;
         runAllBtn.disabled = true;
         // increment index
-        tetraPointIndex++;
+        voronoiRegionIndex++;
     };
 };
 
@@ -217,7 +270,7 @@ function next() {
     // run the next step
     doNextStep();
     // if it was the last step, stop the animation loop
-    if ((pointIndex > points.length) && (tetraPointIndex > tetraPointsLength)) return;
+    if ((pointIndex > points.length) && (voronoiRegionIndex > voronoiRegionLength)) return;
     // otherwise, after a delay, run the next step
     setTimeout(next, 200);
 };
@@ -231,7 +284,7 @@ function runAllSteps() {
 
 // --- Visualization ---
 function clearScene() {
-    [sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges, sceneObjects.voronoiRegions].forEach(group => {
+    [sceneObjects.points, sceneObjects.delaunayEdges, sceneObjects.voronoiEdges, sceneObjects.voronoiRegions, sceneObjects.circumcenters].forEach(group => {
         while (group.children.length) group.remove(group.children[0]);
     });
 }
@@ -337,7 +390,7 @@ const voronoi = (circumcenters, bounds) => {
     };
     // update the UI
     stage.innerHTML = `Voronoi Construction`;
-    step.innerHTML = `${tetraPointIndex}/${(tetraPointsLength - 1)}`;
+    step.innerHTML = `${voronoiRegionIndex}/${(voronoiRegionLength - 1)}`;
     info.innerHTML = `Added a Voronoi region, <br>with color: #${Math.floor(color).toString(16).padStart(6,'0')}.`;
 };
 
