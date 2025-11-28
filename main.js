@@ -154,6 +154,7 @@ function setupSimulation() {
     nextBtn.disabled = false;
     runAllBtn.disabled = false;
     sceneObjects.delaunayEdges.visible = true;
+    sceneObjects.circumcenters.visible = true;
 
     animate();
 }
