@@ -6,7 +6,8 @@ import { Brush, Evaluator, INTERSECTION } from 'three-bvh-csg';
 
 // --- Global Variables ---
 let scene, camera, renderer, controls;
-let delaunay, points, pointIndex, animationFrameId;
+let delaunay, points, pointIndex, animationFrameId
+let tetraPoints = new Set(), tetraPointIndex = 0, tetraPointsLength = 0, tetraPointMap = new Map();
 
 const materials = {
     point: new THREE.PointsMaterial({ color: 0x00aaff, size: 0.1 }),
@@ -25,13 +26,21 @@ const sceneObjects = {
     voronoiEdges: new THREE.Group(),
     voronoiRegions: new THREE.Group(),
 };
+const bounds = new THREE.Mesh(
+    new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
+);
+bounds.position.set(0, 0, 0);
+bounds.updateMatrixWorld();
 
 const startBtn = document.getElementById('start-btn');
 const nextBtn = document.getElementById('next-btn');
 const runAllBtn = document.getElementById('run-all-btn');
 const pointsSlider = document.getElementById('points-slider');
 const pointsCountSpan = document.getElementById('points-count');
-const stepInfo = document.getElementById('step-info');
+const stage = document.getElementById('stage');
+const step = document.getElementById('step');
+const info = document.getElementById('info');
 
 function init() {
     // Scene
@@ -90,7 +99,9 @@ function setupSimulation() {
     // Reset state
     cancelAnimationFrame(animationFrameId);
     pointIndex = 0;
+    tetraPointIndex = 0;
     points = [];
+    tetraPoints = new Set();
     clearScene();
     scene.background = new THREE.Color(0xffffff);
 
@@ -121,8 +132,10 @@ function setupSimulation() {
     drawDelaunay();
 
     // Update UI
-    stepInfo.innerHTML = `Initialized with super-tetrahedron.<br>Ready to add ${numPoints} points.`;
-    startBtn.textContent = 'Restart';
+    stage.innerHTML = `Input definition`;
+    step.innerHTML = `1/1`;
+    info.innerHTML = `Adjust the point-slider, below. <br>Then, press 'Start' to add input points.`;
+    startBtn.textContent = 'Reset';
     nextBtn.disabled = false;
     runAllBtn.disabled = false;
     sceneObjects.delaunayEdges.visible = true;
@@ -130,35 +143,81 @@ function setupSimulation() {
     animate();
 }
 
-function doNextStep() {
-    if (pointIndex >= points.length) {
-        stepInfo.textContent = 'All points have been added. Triangulation complete!';
+const doNextStep = () => {
+    // if there are input points left to add...
+    if (pointIndex < points.length) {
+        // update tetrahedralization
+        tetrahedralization();
+    }
+    // if tetrahedralization is done...
+    else if (pointIndex === points.length) {
+        // increment index
+        pointIndex++;
+        // update the UI
+        info.textContent = 'Tetrahedralization complete.';
+        // add corner points to delaunay
+        const half = ((BOX_SIZE / 2) * 1.5);
+        for (let x = -1; x <= 1; x += 2) {
+            for (let y = -1; y <= 1; y += 2) {
+                for (let z = -1; z <= 1; z += 2) {
+                    delaunay.addPoint(new THREE.Vector3((x * half), (y * half), (z * half)));
+                };
+            };
+        };
+        // get the final tetrahedrons
+        const tetrahedrons = delaunay.getTriangulation();
+        // get points and map, from tetrahedron
+        const { points, pointToCircumcenters } = getPoints(tetrahedrons);
+        // set tetra points 
+        tetraPoints = points;
+        tetraPointsLength = points.size;
+        tetraPointMap = pointToCircumcenters;
+    }
+    // if there are tetrahedron points left to add...
+    else if (tetraPointIndex < tetraPointsLength) {
+        // get the next point
+        const point = tetraPoints.values().next().value;
+        // remove the point
+        tetraPoints.delete(point);
+        // get its circumcenters
+        const circumcenters = (tetraPointMap.get(point) || []);
+        // draw the voronoi region
+        voronoi(circumcenters, bounds);
+        // increment index
+        tetraPointIndex++;
+    }
+    // if voronoi construction is done...
+    else if (tetraPointIndex === tetraPointsLength) {
+        // hide the tetrahedralization edges
+        sceneObjects.delaunayEdges.visible = false;
+        // update the UI
+        info.textContent = 'Voronoi Construction complete.';
         nextBtn.disabled = true;
         runAllBtn.disabled = true;
-        sceneObjects.delaunayEdges.visible = false;
-        drawVoronoi();
-        pointIndex++;
-        return;
-    }
+        // increment index
+        tetraPointIndex++;
+    };
+};
 
+const tetrahedralization = () => {
+    // add the current point
     const point = points[pointIndex];
     const { badTetras, cavityFaces, newTetras } = delaunay.addPoint(point);
+    // increment index
     pointIndex++;
-
-    // Visualize the step
+    // visualize the step
     visualizeStep(point, badTetras, cavityFaces, newTetras);
-
-    stepInfo.innerHTML = `<b>Step ${pointIndex}/${points.length}:</b> Adding point.<br>
-        Found ${badTetras.length} bad tetrahedra (red).<br>
-        Formed cavity of ${cavityFaces.length} faces (yellow).<br>
-        Created ${newTetras.length} new tetrahedra (green).`;
-}
+    // update the UI
+    stage.innerHTML = `Tetrahedralization`;
+    step.innerHTML = `${pointIndex}/${points.length}`;
+    info.innerHTML = `Created a new tetrahedra (green).`;
+};
 
 function next() {
     // run the next step
     doNextStep();
     // if it was the last step, stop the animation loop
-    if (pointIndex > points.length) return;
+    if ((pointIndex > points.length) && (tetraPointIndex > tetraPointsLength)) return;
     // otherwise, after a delay, run the next step
     setTimeout(next, 200);
 };
@@ -243,73 +302,43 @@ const getPoints = tetrahedrons => {
     };
 };
 
-const drawVoronoiRegions = (tetrahedrons, bounds) => {
-    // get points and map, from tetrahedron
-    const { points, pointToCircumcenters } = getPoints(tetrahedrons);
-    // for each point...
-    for (const point of points) {
-        // get its circumcenters
-        const circumcenters = (pointToCircumcenters.get(point) || []);
-        // if there are enough circumcenters to define a voronoi region...
-        if (circumcenters.length >= 4) {
-            // create geometry
-            const geometry = new ConvexGeometry(circumcenters);
-            // create material
-            const material = new THREE.MeshBasicMaterial({
-                color: (Math.random() * 0xffffff),
-                transparent: true,
-                opacity: 0.25,
-                depthWrite: false,
-                polygonOffset: true,
-                side: THREE.DoubleSide
-            });
-            // create a mesh
-            const mesh = new THREE.Mesh(geometry, material);
-            // if the mesh doesn't have uv's...
-            if (!mesh.geometry.attributes.uv) {
-                // add uv's, and update normals
-                const uvArray = new Float32Array(mesh.geometry.attributes.position.count * 2);
-                mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
-                mesh.geometry.computeVertexNormals();
-            };
-            // intersect mesh & bounds (clip to bounding box)
-            const brushA = new Brush(mesh.geometry.clone());
-            const brushB = new Brush(bounds.geometry.clone());
-            const evaluator = new Evaluator();
-            const clippedBrush = evaluator.evaluate(brushA, brushB, INTERSECTION);
-            const clippedMesh = new THREE.Mesh(clippedBrush.geometry, mesh.material);
-            // add metadata
-            clippedMesh.userData.point = point;
-            // add it to the scene
-            sceneObjects.voronoiRegions.add(clippedMesh);
+const voronoi = (circumcenters, bounds) => {
+    const color = (Math.random() * 0xffffff);
+    // if there are enough circumcenters to define a voronoi region...
+    if (circumcenters.length >= 4) {
+        // create geometry
+        const geometry = new ConvexGeometry(circumcenters);
+        // create material
+        const material = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.25,
+            depthWrite: false,
+            polygonOffset: true,
+            side: THREE.DoubleSide
+        });
+        // create a mesh
+        const mesh = new THREE.Mesh(geometry, material);
+        // if the mesh doesn't have uv's...
+        if (!mesh.geometry.attributes.uv) {
+            // add uv's, and update normals
+            const uvArray = new Float32Array(mesh.geometry.attributes.position.count * 2);
+            mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+            mesh.geometry.computeVertexNormals();
         };
+        // intersect mesh & bounds (clip to bounding box)
+        const brushA = new Brush(mesh.geometry.clone());
+        const brushB = new Brush(bounds.geometry.clone());
+        const evaluator = new Evaluator();
+        const clippedBrush = evaluator.evaluate(brushA, brushB, INTERSECTION);
+        const clippedMesh = new THREE.Mesh(clippedBrush.geometry, mesh.material);
+        // add it to the scene
+        sceneObjects.voronoiRegions.add(clippedMesh);
     };
-};
-
-const drawVoronoi = () => {
-    // clear previous visualizations
-    while (sceneObjects.voronoiRegions.children.length)
-        sceneObjects.voronoiRegions.remove(sceneObjects.voronoiRegions.children[0]);
-    // get bounds
-    const bounds = new THREE.Mesh(
-        new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE),
-        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 })
-    );
-    bounds.position.set(0, 0, 0);
-    bounds.updateMatrixWorld();
-    // add corner points to delaunay
-    const half = ((BOX_SIZE / 2) * 1.5);
-    for (let x = -1; x <= 1; x += 2) {
-        for (let y = -1; y <= 1; y += 2) {
-            for (let z = -1; z <= 1; z += 2) {
-                delaunay.addPoint(new THREE.Vector3((x * half), (y * half), (z * half)));
-            };
-        };
-    };
-    // get the final tetrahedrons
-    const tetrahedrons = delaunay.getTriangulation();
-    // draw the voronoi regions
-    drawVoronoiRegions(tetrahedrons, bounds);
+    // update the UI
+    stage.innerHTML = `Voronoi Construction`;
+    step.innerHTML = `${tetraPointIndex}/${(tetraPointsLength - 1)}`;
+    info.innerHTML = `Added a Voronoi region, <br>with color: #${Math.floor(color).toString(16).padStart(6,'0')}.`;
 };
 
 function getTetraEdges(tetras) {
