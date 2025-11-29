@@ -86,12 +86,12 @@
 
     <h2>Problem Description</h2>
     <p>
-        Utilizing Three.js, we propose a project that simulates the generation of a Voronoi diagram in a<br>
+        Utilizing Three.js, we built a project that simulates the generation of a Voronoi diagram in a<br>
         three-dimensional initial cubic volume to act as a pedagogical aid for the process of 3D Voronoi creation.<br>
-        The user can select the amount of different points inside the region.Each point is then randomly placed.<br>
-        Once the user starts the program, a set of calculations is done to produce Delaunay tetrahedrons inside the <br>
-        volume. After these tetrahedralizations are done, the app calculates the circumcenters of each one. This, in<br>
-        turn, produces the vertexes vertices of Voronoi cells. Each cell divides the interior of the cubic volume to <br>
+        The user can select the amount of different points inside the region. Each point is then randomly placed.<br>
+        Once the user starts the program, a set of calculations are done to produce Delaunay tetrahedrons inside the <br>
+        volume. After this tetrahedralization is done, the app calculates the circumcenters of each tetrahedron. This, in<br>
+        turn, produces the vertices of Voronoi cells. Each cell divides the interior of the cubic volume to <br>
         illustrate the three-dimensional partition. Additionally, we give the user the ability to rotate/move the <br>
         camera to some extent.<br>
         <br>
@@ -117,6 +117,24 @@
         ● 3D Delaunay Trianglation<br>
         &nbsp;○ https://www.cs.purdue.edu/homes/tamaldey/course/531/Delaunay%283D%29.pdf<br>
     </p>
+
+    <h2>Background Information</h2>
+    <p>
+        A voronoi diagram is a method of partitioning space into cells, where each cell corresponds to a region<br>
+        that is closest to a specific point (called a seed point). Delaunay triangulation is a method of connecting<br>
+        a set of points in space to form a mesh of triangles such that no point is inside the circumcircle<br>
+        of any triangle.<br>
+        <br>
+        This concept can be extended to three dimensions, where tetrahedrons are formed instead of triangles.<br>
+        Voronoi diagrams and delaunay triangulations (or tetrahedralizations in 3D) are duals, meaning that<br>
+        one can derive one from the other. The vertices of the voronoi diagram correspond to the circumcenters<br>
+        of the tetrahedrons in the delaunay tetrahedralization, and the edges of the voronoi diagram correspond<br>
+        to the faces of the tetrahedrons. This duality allows for a relatively simple process to create the voronoi diagram.<br>
+        <br>
+        To make this work, We assume that the input points are distributed within a bounded cubic volume.<br>
+        This is because the delaunay tetrahedralization algorithm we are using splits a tetrahedron into smaller<br>
+        tetrahedrons, so the seed points must all be located within the first tetrahedron, which contains teh bounding cube.<br>
+        </p>
 
     <h2>Psuedo-code Description</h2>
     <p>...</p>
