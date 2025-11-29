@@ -39,8 +39,8 @@
         }
 
         p {
-            color: #888;
-            font-size: 14px;
+            color: #fff;
+            font-size: 20px;
             padding-bottom: 0.125em;
         }
 
@@ -85,10 +85,38 @@
     <p>See the application <a href="./" target="_blank">here</a>.</p>
 
     <h2>Problem Description</h2>
-    <p>...</p>
+    <p>
+        Utilizing Three.js, we propose a project that simulates the generation of a Voronoi diagram in a<br>
+        three-dimensional initial cubic volume to act as a pedagogical aid for the process of 3D Voronoi creation.<br>
+        The user can select the amount of different points inside the region.Each point is then randomly placed.<br>
+        Once the user starts the program, a set of calculations is done to produce Delaunay tetrahedrons inside the <br>
+        volume. After these tetrahedralizations are done, the app calculates the circumcenters of each one. This, in<br>
+        turn, produces the vertexes vertices of Voronoi cells. Each cell divides the interior of the cubic volume to <br>
+        illustrate the three-dimensional partition. Additionally, we give the user the ability to rotate/move the <br>
+        camera to some extent.<br>
+        <br>
+        In order to highlight the important steps of the algorithm, we will have certain points where the<br>
+        algorithm will pause and highlight an edge/vertex/surface, waiting for the user to press the “next” button.<br>
+        There may be text alongside this as needed. There will also be a button to run the simulation without any<br>
+        pausing so that the user can see the entire algorithm run at once.
+    </p>
 
-    <h2>Background Information</h2>
-    <p>...</p>
+    <h2>References</h2>
+    <p>
+        ● Computing the 3D Voronoi Diagram Robustly: An Easy Explanation<br>
+        &nbsp;○ https://ieeexplore.ieee.org/document/4276112<br>
+        &nbsp;○ Note that this says that the 3d Voronoi diagram is a dual to the Delaunay Tetrahedralization,<br>
+        &nbsp;which could give more options on how to build it.<br>
+        ● Constructing L∞ Voronoi Diagrams in 2D and 3D<br>
+        &nbsp;○ 3D Voronoi in supremum distance (Linf)<br>
+        &nbsp;○ https://onlinelibrary.wiley.com/doi/full/10.1111/cgf.14609<br>
+        ● High-performance computation of distributed-memory parallel 3D Voronoi and Delaunay tessellation (ACM)<br>
+        &nbsp;○ https://dl-acm-org.ezproxy.rit.edu/doi/10.1109/SC.2014.86<br>
+        ● Delaunay triangulation (Wikipedia)<br>
+        &nbsp;○ https://en.wikipedia.org/wiki/Delaunay_triangulation<br>
+        ● 3D Delaunay Trianglation<br>
+        &nbsp;○ https://www.cs.purdue.edu/homes/tamaldey/course/531/Delaunay%283D%29.pdf<br>
+    </p>
 
     <h2>Psuedo-code Description</h2>
     <p>...</p>
