@@ -74,7 +74,7 @@ function init() {
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
     directionalLight.position.set(10, 10, 10);
     scene.add(directionalLight);
-    scene.background = new THREE.Color(0xFFFFFF);
+    scene.background = new THREE.Color(0xF5F5F0);
 
     // Bounding Box
     const boxGeom = new THREE.BoxGeometry(BOX_SIZE, BOX_SIZE, BOX_SIZE);
@@ -118,7 +118,7 @@ function setupSimulation() {
     circumcenterPoints = [];
     voronoiRegions = new Set();
     clearScene();
-    scene.background = new THREE.Color(0xffffff);
+    scene.background = new THREE.Color(0xF5F5F0);
 
     // Generate random points
     const numPoints = parseInt(pointsSlider.value);
@@ -149,7 +149,9 @@ function setupSimulation() {
     // Update UI
     stage.innerHTML = `Input definition`;
     step.innerHTML = `1/1`;
-    info.innerHTML = `Adjust the point-slider, below. <br>Then, press 'Start' to add input points.`;
+    info.innerHTML = `Generated ${numPoints} random point${numPoints !== 1 ? 's' : ''} in a ${BOX_SIZE}×${BOX_SIZE}×${BOX_SIZE} cube.<br>`;
+    info.innerHTML += `Points are distributed uniformly with small jitter to prevent degeneracies.<br>`;
+    info.innerHTML += `Initial super-tetrahedron created to contain all points. Press 'Next Step' to begin tetrahedralization.`;
     startBtn.textContent = 'Reset';
     nextBtn.disabled = false;
     runAllBtn.disabled = false;
@@ -174,8 +176,12 @@ const doNextStep = () => {
     else if (pointIndex === points.length) {
         // increment index
         pointIndex++;
-        // update the UI
-        info.textContent = 'Tetrahedralization complete.';
+        // update the UI with summary
+        const totalTetras = delaunay.tetrahedra.length;
+        info.innerHTML = `Tetrahedralization complete!<br>`;
+        info.innerHTML += `Successfully added all input points.<br>`;
+        info.innerHTML += `Created ${totalTetras} tetrahedron${totalTetras !== 1 ? 'a' : ''} in total.<br>`;
+        info.innerHTML += `Adding corner points to complete the boundary, then calculating circumcenters...`;
         // add corner points to delaunay
         const half = ((BOX_SIZE / 2) * 1.5);
         for (let x = -1; x <= 1; x += 2) {
@@ -210,20 +216,42 @@ const doNextStep = () => {
     // if there are circumcenters left to add...
     else if (circumcenterIndex < circumcenterLength) {
         // create and add marker, for the current circumcenter
+        const circumcenter = circumcenterPoints[circumcenterIndex];
         const marker = cube(0xffaa00);
-        marker.position.copy(circumcenterPoints[circumcenterIndex]);
+        marker.position.copy(circumcenter);
         sceneObjects.circumcenters.add(marker);
-        // update the UI
+        // update the UI with detailed information
         stage.innerHTML = `Circumcenter Search`;
-        step.innerHTML = `${circumcenterIndex}/${(circumcenterLength - 1)}`;
-        info.innerHTML = `Found a circumcenter.`;
+        step.innerHTML = `${circumcenterIndex + 1}/${circumcenterLength}`;
+        
+        // Format circumcenter coordinates
+        const ccStr = `(${circumcenter.x.toFixed(3)}, ${circumcenter.y.toFixed(3)}, ${circumcenter.z.toFixed(3)})`;
+        
+        // Calculate distance from origin for context
+        const distFromOrigin = Math.sqrt(
+            circumcenter.x * circumcenter.x + 
+            circumcenter.y * circumcenter.y + 
+            circumcenter.z * circumcenter.z
+        ).toFixed(2);
+        
+        // Build detailed info text
+        let infoText = `Circumcenter ${circumcenterIndex + 1} of ${circumcenterLength}.<br>`;
+        infoText += `- Coordinates: ${ccStr}<br>`;
+        infoText += `- Distance from origin: ${distFromOrigin} units.<br>`;
+        infoText += `- This is the center of a tetrahedron's circumsphere, `;
+        infoText += `which will become a vertex in the Voronoi diagram.`;
+        
+        info.innerHTML = infoText;
         // increment index
         circumcenterIndex++;
     }
     // if circumcenter search is done...
     else if (circumcenterIndex === circumcenterLength) {
-        // update the UI
-        info.textContent = 'Circumcenter Search complete.';
+        // update the UI with summary
+        info.innerHTML = `Circumcenter Search complete.<br>`;
+        info.innerHTML += `Found ${circumcenterLength} valid circumcenter${circumcenterLength !== 1 ? 's' : ''} `;
+        info.innerHTML += `within the bounding box.<br>`;
+        info.innerHTML += `- Each circumcenter is a vertex of the Voronoi diagram.`;
         // increment index
         circumcenterIndex++;
     }
@@ -235,8 +263,8 @@ const doNextStep = () => {
         voronoiRegions.delete(region);
         // get its circumcenters
         const circumcenters = (voronoiRegionMap.get(region) || []);
-        // draw the voronoi region
-        voronoi(circumcenters, bounds);
+        // draw the voronoi region (pass the region point for better info)
+        voronoi(circumcenters, bounds, region);
         // increment index
         voronoiRegionIndex++;
     }
@@ -245,8 +273,11 @@ const doNextStep = () => {
         // hide the tetrahedralization edges
         sceneObjects.delaunayEdges.visible = false;
         sceneObjects.circumcenters.visible = false;
-        // update the UI
-        info.textContent = 'Voronoi Construction complete.';
+        // update the UI with summary
+        info.innerHTML = `Voronoi Construction complete!<br>`;
+        info.innerHTML += `- Successfully constructed ${voronoiRegionLength} Voronoi region${voronoiRegionLength !== 1 ? 's' : ''}.<br>`;
+        info.innerHTML += `- Each colored region represents the set of points closest to its seed point.<br>`;
+        info.innerHTML += `- The complete 3D space has been partitioned into these cells.`;
         nextBtn.disabled = true;
         runAllBtn.disabled = true;
         // increment index
@@ -262,10 +293,33 @@ const tetrahedralization = () => {
     pointIndex++;
     // visualize the step
     visualizeStep(point, badTetras, cavityFaces, newTetras);
-    // update the UI
+    // update the UI with detailed information
     stage.innerHTML = `Tetrahedralization`;
     step.innerHTML = `${pointIndex}/${points.length}`;
-    info.innerHTML = `Created a new tetrahedra (green).`;
+    
+    // Format point coordinates
+    const pointStr = `(${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`;
+    
+    // Build detailed info text
+    let infoText = `Adding point ${pointIndex} at ${pointStr}.<br>`;
+    
+    if (badTetras.length > 0) {
+        infoText += `<span style="color: #CC0000; font-weight: 600;">- Removed ${badTetras.length} bad tetrahedron${badTetras.length > 1 ? 'a' : ''}</span> `;
+        infoText += `(circumspheres contain new point).<br>`;
+    }
+    
+    if (cavityFaces.length > 0) {
+        infoText += `<span style="color: #2563EB; font-weight: 600;">- Cavity has ${cavityFaces.length} boundary face${cavityFaces.length > 1 ? 's' : ''}</span>.<br>`;
+    }
+    
+    if (newTetras.length > 0) {
+        infoText += `<span style="color: #059669; font-weight: 600;">- Created ${newTetras.length} new tetrahedron${newTetras.length > 1 ? 'a' : ''}</span> `;
+        infoText += `connecting point to cavity faces.`;
+    } else {
+        infoText += `Point is inside existing tetrahedron.`;
+    }
+    
+    info.innerHTML = infoText;
 };
 
 function next() {
@@ -357,7 +411,7 @@ const getPoints = tetrahedrons => {
     };
 };
 
-const voronoi = (circumcenters, bounds) => {
+const voronoi = (circumcenters, bounds, regionPoint) => {
     const color = (Math.random() * 0xffffff);
     // if there are enough circumcenters to define a voronoi region...
     if (circumcenters.length >= 4) {
@@ -390,10 +444,34 @@ const voronoi = (circumcenters, bounds) => {
         // add it to the scene
         sceneObjects.voronoiRegions.add(clippedMesh);
     };
-    // update the UI
+    // update the UI with detailed information
     stage.innerHTML = `Voronoi Construction`;
-    step.innerHTML = `${voronoiRegionIndex}/${(voronoiRegionLength - 1)}`;
-    info.innerHTML = `Added a Voronoi region, <br>with color: #${Math.floor(color).toString(16).padStart(6,'0')}.`;
+    step.innerHTML = `${voronoiRegionIndex + 1}/${voronoiRegionLength}`;
+    
+    // Format point coordinates if available
+    let pointStr = '';
+    if (regionPoint) {
+        pointStr = ` at (${regionPoint.x.toFixed(2)}, ${regionPoint.y.toFixed(2)}, ${regionPoint.z.toFixed(2)})`;
+    }
+    
+    // Build detailed info text
+    let infoText = `Constructing Voronoi region ${voronoiRegionIndex + 1} of ${voronoiRegionLength}${pointStr}.<br>`;
+    
+    if (circumcenters.length >= 4) {
+        infoText += `Using ${circumcenters.length} circumcenters to form convex hull.<br>`;
+        infoText += `- This region contains all points closer to this seed than to any other.<br>`;
+        
+        // Calculate approximate region center
+        const regionCenter = new THREE.Vector3();
+        circumcenters.forEach(cc => regionCenter.add(cc));
+        regionCenter.divideScalar(circumcenters.length);
+        const centerStr = `(${regionCenter.x.toFixed(2)}, ${regionCenter.y.toFixed(2)}, ${regionCenter.z.toFixed(2)})`;
+        infoText += `- Region center: ${centerStr}.`;
+    } else {
+        infoText += `- Insufficient circumcenters (${circumcenters.length} < 4) to form a valid region.`;
+    }
+    
+    info.innerHTML = infoText;
 };
 
 function getTetraEdges(tetras) {
