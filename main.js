@@ -304,7 +304,7 @@ const tetrahedralization = () => {
     let infoText = `Adding point ${pointIndex} at ${pointStr}.<br>`;
     
     if (badTetras.length > 0) {
-        infoText += `<span style="color: #CC0000; font-weight: 600;">- Removed ${badTetras.length} bad tetrahedron${badTetras.length > 1 ? 'a' : ''}</span> `;
+        infoText += `<span style="color: #CC0000; font-weight: 600;">- Removed ${badTetras.length} bad tetrahedr${badTetras.length > 1 ? 'a' : 'on'}</span> `;
         infoText += `(circumspheres contain new point).<br>`;
     }
     
@@ -313,7 +313,7 @@ const tetrahedralization = () => {
     }
     
     if (newTetras.length > 0) {
-        infoText += `<span style="color: #059669; font-weight: 600;">- Created ${newTetras.length} new tetrahedron${newTetras.length > 1 ? 'a' : ''}</span> `;
+        infoText += `<span style="color: #059669; font-weight: 600;">- Created ${newTetras.length} new tetrahedr${newTetras.length > 1 ? 'a' : 'on'}</span> `;
         infoText += `connecting point to cavity faces.`;
     } else {
         infoText += `Point is inside existing tetrahedron.`;
