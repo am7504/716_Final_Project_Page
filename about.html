@@ -168,13 +168,36 @@
         to the faces of the tetrahedrons. This duality allows for a relatively simple process to create the voronoi diagram.
     </p>
     <p>
-        To make this work, We assume that the input points are distributed within a bounded cubic volume.
+        To make this work, we assume that the input points are distributed within a bounded cubic volume.
         This is because the delaunay tetrahedralization algorithm we are using splits a tetrahedron into smaller
-        tetrahedrons, so the seed points must all be located within the first tetrahedron, which contains teh bounding cube.
+        tetrahedrons, so the seed points must all be located within the first tetrahedron, which contains the bounding cube.
     </p>
 
-    <h2>Psuedo-code Description</h2>
-    <p>...</p>
+    <h2>Implementation Details</h2>
+    <p>
+        <p>
+            This program utilizes javascript and Three.js to create a 3D environment for our pegagogical aid.
+            It is hosted as a web application on github pages and can be run locally as well.
+        </p>
+        <p>
+            The algorithm is split into three main parts:
+        </p>
+        <ul>
+            <li>Generating the Delaunay Tetrahedralization</li>
+            <li>Calculating the Circumcenters of the Tetrahedrons</li>
+            <li>Constructing the Voronoi Diagram from the Circumcenters</li>
+        </ul>
+
+        <p>
+            To facilitate these steps, we classes to represent the tetrahedrons and the overall delaunay 
+            tetrahedralization. This allowed us to make use of an object oriented approach to manage the complexity of the algorithm.
+            The tetrahedron class includes methods for finding its circumcenter, checking if a point is inside itself, 
+            and splitting itself into smaller tetrahedrons. The tetrahedralization class manages a list of tetrahedrons and includes 
+            methods of adding new points to expand the tetrahedralization. It is initialized as a large super-tetrahedron that encompasses
+            the bounding box.
+        </p>
+
+    </p>
 
     <h2>Interesting Choices</h2>
     <p>
