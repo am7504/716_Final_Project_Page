@@ -18,7 +18,7 @@
 
         /* -- */
 
-        h1, h2, p, a, li {
+        h1, h2, h3, p, a, li, pre {
             color: #fff;
             font-weight: 300;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -38,7 +38,14 @@
             padding-bottom: 0.25em;
         }
 
-        p, li {
+        h3 {
+            font-size: 17px;
+            font-weight: 600;
+            padding-top: 1em;
+            padding-bottom: 0.25em;
+        }
+
+        p, li, pre {
             color: #999;
             font-size: 16px;
             font-weight: 400;
@@ -57,12 +64,29 @@
 
         ul {
             list-style-type: disc;
+            margin-top: 8px;
             margin-left: 20px;
         }
 
         ul ul {
             list-style-type: circle;
+            margin-top: 0px;
             margin-left: 30px;
+        }
+
+        pre {
+            background: #222;
+            font-family: monospace;
+            font-size: 1em;
+            white-space: pre;
+            border: none;
+            border-radius: 6px;
+            tab-size: 2;
+            width: 100%;
+            overflow-x: scroll;
+            margin-bottom: 8px;
+            padding: 16px;
+            padding-left: 24px;
         }
     </style>
 </head>
@@ -86,10 +110,10 @@
                 Does not need to be long (one or two paragraphs is ok), 
                 but state any assumptions that are necessary for your approach to work.
 
-            (×) Describe the pseudo-code of the algorithm that you are 
+            (✓) Describe the pseudo-code of the algorithm that you are 
                 creating and highlight what parts of that pseudocode you are animating.
 
-            (×) Discuss any interesting choices that 
+            (✓) Discuss any interesting choices that 
                 you made in the implementation of the algorithm.
     
     -->
@@ -101,22 +125,149 @@
     <h2>Application</h2>
     <p>See the interactive web application <a href="./">here</a>.</p>
 
-    <h2>Problem Description</h2>
+    <h2>Problem Overview</h2>
     <p>
-        Utilizing Three.js, we built a project that simulates the generation of a Voronoi diagram in a 
-        three-dimensional initial cubic volume to act as a pedagogical aid for the process of 3D Voronoi creation. 
-        The user can select the amount of different points inside the region. Each point is then randomly placed. 
-        Once the user starts the program, a set of calculations are done to produce Delaunay tetrahedrons inside the  
-        volume. After this tetrahedralization is done, the app calculates the circumcenters of each tetrahedron. This, in 
-        turn, produces the vertices of Voronoi cells. Each cell divides the interior of the cubic volume to  
-        illustrate the three-dimensional partition. Additionally, we give the user the ability to rotate/move the  
-        camera to some extent.
+        Voronoi diagrams in three-dimensions include complexities which make 
+        them difficult to learn and understand, when compared to their well-known 
+        two-dimensional counterparts. Our application is intended to aid in the learning 
+        and understanding of these three-dimensional Voronoi diagrams, by visualizing the core 
+        stages of their creation; tetrahedralization, circumcenter search, and Voronoi region construction.
+    </p>
+
+    <h2>Background Information</h2>
+    <p>
+        A Voronoi diagram is a method of partitioning space into cells, where each cell corresponds to a region
+        that is closest to a specific point (called a seed point). Delaunay triangulation is a method of connecting
+        a set of points in space to form a mesh of triangles such that no point is inside the circumcircle
+        of any triangle.
     </p>
     <p>
-        In order to highlight the important steps of the algorithm, we will have certain points where the
-        algorithm will pause and highlight an edge/vertex/surface, waiting for the user to press the “next” button.
-        There may be text alongside this as needed. There will also be a button to run the simulation without Additionally
-        pausing so that the user can see the entire algorithm run at once.
+        This concept can be extended to three dimensions, where tetrahedrons are formed instead of triangles.
+        Voronoi diagrams and delaunay triangulations (or tetrahedralizations in 3D) are duals, meaning that
+        one can derive one from the other. The vertices of the Voronoi diagram correspond to the circumcenters
+        of the tetrahedrons in the delaunay tetrahedralization, and the edges of the Voronoi diagram correspond
+        to the faces of the tetrahedrons. This duality allows for a relatively simple process to create the Voronoi diagram.
+    </p>
+    <p>
+        To make this work, we assume that the input points are distributed within a bounded cubic volume.
+        This is because the delaunay tetrahedralization algorithm we are using splits a tetrahedron into smaller
+        tetrahedrons, so the seed points must all be located within the first tetrahedron, which contains the bounding cube.
+    </p>
+
+    <h2>Implementation Overview</h2>
+    <p>
+        Utilizing Three.js, we built an application that simulates the generation of a Voronoi diagram, within a 
+        three-dimensional cubic volume. This is intended to act as a pedagogical aid for the process of creation a three-dimensional Voronoi diagram. 
+        A user can select the number of different points to place inside of the cubic volume. And, each point is randomly placed. 
+        Once the user starts the program, a set of calculations are executed to produce Delaunay tetrahedrons inside the  
+        volume. After this tetrahedralization has been completed, the circumcenters of each tetrahedron are found. This, in 
+        turn, produces the vertices of Voronoi regions. Each region divides the interior of the cubic volume, to  
+        illustrate the three-dimensional partition. Additionally, we give a user the ability to rotate/move the  
+        camera, so that they can view the process from different angles and perspectives.
+    </p>
+    <p>
+        In order to draw attention to important parts within the process, we included edge/vertex/surface highlighting, as well as user-controlled progression.
+        A “Next Step” button is provided to users, for manually progressing through each step.
+        And, a ”Run All” button is provided, for running the simulation without needing to repeatedly press “Next Step”.
+        Additional information is provided, in an upper-left window.
+    </p>
+
+    <h2>Implementation Details</h2>
+    <p>
+        Our program utilizes javascript and Three.js to create a three-dimensional environment.
+        It is hosted as a web application on github pages, and can be run locally as well.
+    </p>
+    <h3>Algorithm Stages</h3>
+    <ul>
+        <li>Generating the Delaunay Tetrahedralization</li>
+        <li>Calculating the Circumcenters of the Tetrahedrons</li>
+        <li>Constructing the Voronoi Regions from the Circumcenters</li>
+    </ul>
+
+    <h3>Approach</h3>
+    <p>
+        To facilitate these steps, we use classes to represent the tetrahedrons and the overall delaunay 
+        tetrahedralization. This allowed us to make use of an object oriented approach to manage the complexity of the algorithm.
+        The tetrahedron class includes methods for finding its circumcenter, checking if a point is inside itself, 
+        and splitting itself into smaller tetrahedrons. The tetrahedralization class manages a list of tetrahedrons and includes 
+        methods for adding new points to expand the tetrahedralization. It is initialized as a large super-tetrahedron that encompasses
+        the bounding box.
+    </p>
+
+    <h3>Tetrahedralization</h3>
+    <p>We highlight the addition of input points, which involves the addition and removal of tetrahedrons within our Delaunay data structure.</p>
+    <pre>
+for each input point...
+
+  find tetrahedrons which contain it.
+  create a list of triangles from those tetrahedrons.
+  remove the found tetrahedrons from a stored list.
+
+  for each triangle...
+
+    combine the point and triangle, to form a new tetrahedron.
+    add the new tetrahedron to the stored list.
+
+  visualize the stored list of tetrahedrons, by their edges.</pre>
+
+    <h3>Circumcenter Calculation</h3>
+    <p>We highlight the discovery of circumcenters, for each valid tetrahedron.</p>
+    <pre>
+for each tetrahedron...
+
+  set a point as `reference`.
+
+  translate tetrahedron to the origin.
+  point[i] -= reference
+
+  get determinant of the three points.
+  determinant = x1(y2z3 - z2y3) - 
+                y1(x2z3 - z2x3) + 
+                z1(x2y3 - y2x3)
+
+  get squared-lengths of the three points.
+  lengthSquared[i] = x^2 + y^2 + z^2
+
+  get circumcenter's [x,y,z] coordinates.
+  circumcenter[x] = (
+    (lengthSquared[1](y2z3 − y3z2)) − 
+    (lengthSquared[2](y1z3 − y3z1)) + 
+    (lengthSquared[3](y1z2 − y2z1)) 
+  ) / (0.5 * determinant)
+
+  translate tetrahedron back.
+  point[i] += reference
+
+  visualize an orange cube, at the found [x,y,z] coordinates.</pre>
+
+    <h3>Voronoi Region Construction</h3>
+    <p>We highlight the creation of a Voronoi region for each original input point. This is based on the found circumcenters, as well as the bounding box.</p>
+    <pre>
+for each tetrahedron...
+
+  associate its circumcenter with its four points.
+
+for each input point...
+
+  create a convex geometry (3D convex hull), using its associated circumcenters.
+
+for each convex geometry...
+
+  for each edge...
+
+    if it is entirely outside of the bounding box, remove the edge.
+    if it intersects with a bounding box face, replace the edge with one that starts/ends at the box face.
+
+for each convex geometry...
+
+  re-construct it, using its bounded edges.
+  add a random fill color, and visualize it.</pre>
+
+    <h2>Interesting Choices</h2>
+    <p>
+        One interesting choice we made is to use the incremental algorithm for the delaunay tetrahedralization.
+        Despite it not being the most efficient algorithm, this algorithm is relatively simple to implement and 
+        understand, making it a good choice for a pedagogical aid. It allows for simple step by step explanations.
     </p>
 
     <h2>References</h2>
@@ -152,59 +303,6 @@
             </ul>
         </li>
     </ul>
-
-    <h2>Background Information</h2>
-    <p>
-        A voronoi diagram is a method of partitioning space into cells, where each cell corresponds to a region
-        that is closest to a specific point (called a seed point). Delaunay triangulation is a method of connecting
-        a set of points in space to form a mesh of triangles such that no point is inside the circumcircle
-        of any triangle.
-    </p>
-    <p>
-        This concept can be extended to three dimensions, where tetrahedrons are formed instead of triangles.
-        Voronoi diagrams and delaunay triangulations (or tetrahedralizations in 3D) are duals, meaning that
-        one can derive one from the other. The vertices of the voronoi diagram correspond to the circumcenters
-        of the tetrahedrons in the delaunay tetrahedralization, and the edges of the voronoi diagram correspond
-        to the faces of the tetrahedrons. This duality allows for a relatively simple process to create the voronoi diagram.
-    </p>
-    <p>
-        To make this work, we assume that the input points are distributed within a bounded cubic volume.
-        This is because the delaunay tetrahedralization algorithm we are using splits a tetrahedron into smaller
-        tetrahedrons, so the seed points must all be located within the first tetrahedron, which contains the bounding cube.
-    </p>
-
-    <h2>Implementation Details</h2>
-    <p>
-        <p>
-            This program utilizes javascript and Three.js to create a 3D environment for our pegagogical aid.
-            It is hosted as a web application on github pages and can be run locally as well.
-        </p>
-        <p>
-            The algorithm is split into three main parts:
-        </p>
-        <ul>
-            <li>Generating the Delaunay Tetrahedralization</li>
-            <li>Calculating the Circumcenters of the Tetrahedrons</li>
-            <li>Constructing the Voronoi Diagram from the Circumcenters</li>
-        </ul>
-
-        <p>
-            To facilitate these steps, we classes to represent the tetrahedrons and the overall delaunay 
-            tetrahedralization. This allowed us to make use of an object oriented approach to manage the complexity of the algorithm.
-            The tetrahedron class includes methods for finding its circumcenter, checking if a point is inside itself, 
-            and splitting itself into smaller tetrahedrons. The tetrahedralization class manages a list of tetrahedrons and includes 
-            methods of adding new points to expand the tetrahedralization. It is initialized as a large super-tetrahedron that encompasses
-            the bounding box.
-        </p>
-
-    </p>
-
-    <h2>Interesting Choices</h2>
-    <p>
-        One interesting choice we made is to use the incremental algorithm for the delaunay tetrahedralization.
-        Despite it not being the most efficient algorithm, this algorithm is relatively simple to implement and 
-        understand, making it a good choice for a pedagogical aid. It allows for simple step by step explainations.
-    </p>
 
 </body>
 </html>
